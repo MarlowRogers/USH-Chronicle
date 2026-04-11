@@ -62,6 +62,7 @@ The main priority is making the weekly update workflow faster. In order of prior
 1. **Separate data from UI** — move `ARTICLES` out of `index.html` into `articles.js` or `articles.json` so new entries can be added without touching the HTML/CSS
 2. **Parser script** — a script (Node.js or plain JS) that takes raw Google Doc markdown and converts it to the correct JS object format automatically
 3. **Update workflow** — clear, fast process for pasting new Google Doc entries and getting them into the site
+4. **TODO: Sync/backend for in-browser article submission** — build a backend (e.g. a small serverless function or GitHub API integration) so that articles submitted through the website UI are persisted to the repo and reflected on the live site, rather than requiring a manual edit-commit-push workflow
 
 ---
 
