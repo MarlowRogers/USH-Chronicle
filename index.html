@@ -656,14 +656,14 @@
   </div>
 </div>
 
-<script src="articles.js"></script>
 <script>
 // ── STATE ──
 const MONTHS_ORDER = ["April","March","February","January"];
-const allDates = [...new Set(ARTICLES.map(a => a.date))];
-const allCats  = ["International","National","Local"];
+let ARTICLES = [];
+let allDates  = [];
+const allCats = ["International","National","Local"];
 
-let activeDates = new Set(allDates);
+let activeDates = new Set();
 let activeCats  = new Set(allCats);
 let showGoodOnly = false;
 let searchQuery  = '';
@@ -867,8 +867,13 @@ function render() {
   });
 }
 
-buildControls();
-render();
+(async () => {
+  ARTICLES    = await fetch('links.json').then(r => r.json());
+  allDates    = [...new Set(ARTICLES.map(a => a.date))];
+  activeDates = new Set(allDates);
+  buildControls();
+  render();
+})();
 
 // ── ADD ARTICLE MODAL ──
 function openAddModal() {

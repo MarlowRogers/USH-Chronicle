@@ -87,3 +87,6 @@ The main priority is making the weekly update workflow faster. In order of prior
 - No build tools, no npm, no frameworks — this needs to be maintainable by a teacher
 - The data separation (if done) should not require any server or build step to work
 - New entries are added frequently (roughly daily during the school year)
+
+
+
