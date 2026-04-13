@@ -1002,7 +1002,7 @@ document.getElementById('modal-submit-btn').onclick = async () => {
       method: 'PUT', headers,
       body: JSON.stringify({
         message: `Add article: ${headline.slice(0, 60)}`,
-        content: btoa(JSON.stringify(current, null, 2) + '\n'),
+        content: btoa(unescape(encodeURIComponent(JSON.stringify(current, null, 2) + '\n'))),
         sha: fileData.sha
       })
     });
