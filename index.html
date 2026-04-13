@@ -599,6 +599,7 @@
     <span class="controls-label">Category</span>
     <div class="controls-group" id="cat-filters"></div>
     <span id="article-count"></span>
+    <button class="filter-btn" id="settings-btn" title="Settings" style="margin-left:auto;font-size:16px;padding:4px 10px;">⚙</button>
   </div>
   <div class="search-row">
     <input type="search" id="search-input" class="search-input" placeholder="Search headlines and sources…">
@@ -614,6 +615,26 @@
     The Thacher School &nbsp;·&nbsp; US Honors History Chronicle &nbsp;·&nbsp; 2026 &nbsp;·&nbsp; Ojai, California
   </div>
 </footer>
+
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal-box">
+    <button class="modal-close" id="settings-close-btn" aria-label="Close">×</button>
+    <div class="modal-title">Settings</div>
+    <div class="modal-field">
+      <label class="modal-label" for="s-token">GitHub Personal Access Token</label>
+      <input class="modal-input" id="s-token" type="password" placeholder="github_pat_…">
+    </div>
+    <p style="font-size:12px;color:#7a6e5f;margin-top:6px;line-height:1.5;">
+      Create a fine-grained token at <strong>github.com → Settings → Personal access tokens</strong>
+      with <em>Contents: Read &amp; Write</em> on only this repo. Stored in your browser only.
+    </p>
+    <div class="modal-actions">
+      <button class="modal-submit" id="settings-save-btn">Save Token</button>
+      <button class="modal-cancel" id="settings-cancel-btn">Cancel</button>
+    </div>
+    <div class="modal-snippet" id="settings-status" style="display:none"></div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="add-modal">
   <div class="modal-box">
@@ -868,7 +889,11 @@ function render() {
 }
 
 (async () => {
-  ARTICLES    = await fetch('links.json').then(r => r.json());
+  const [historical, added] = await Promise.all([
+    fetch('links.json').then(r => r.json()),
+    fetch('new_articles.json').then(r => r.json()).catch(() => [])
+  ]);
+  ARTICLES    = [...added, ...historical];
   allDates    = [...new Set(ARTICLES.map(a => a.date))];
   activeDates = new Set(allDates);
   buildControls();
@@ -884,8 +909,8 @@ function openAddModal() {
   document.getElementById('f-good').checked = false;
   document.getElementById('f-cat').value = 'International';
   document.getElementById('modal-snippet').style.display = 'none';
-  document.getElementById('modal-copy-btn').style.display = 'none';
   document.getElementById('modal-submit-btn').textContent = 'Add to Chronicle';
+  document.getElementById('modal-submit-btn').disabled = false;
   document.getElementById('add-modal').classList.add('open');
   document.getElementById('f-date').focus();
 }
@@ -899,61 +924,113 @@ document.getElementById('modal-cancel-btn').onclick = closeAddModal;
 document.getElementById('add-modal').onclick = (e) => {
   if (e.target === document.getElementById('add-modal')) closeAddModal();
 };
+document.getElementById('settings-btn').onclick = () => {
+  const saved = localStorage.getItem(TOKEN_KEY);
+  document.getElementById('s-token').value = saved || '';
+  document.getElementById('settings-status').style.display = 'none';
+  document.getElementById('settings-modal').classList.add('open');
+};
+document.getElementById('settings-modal').onclick = (e) => {
+  if (e.target === document.getElementById('settings-modal')) document.getElementById('settings-modal').classList.remove('open');
+};
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeAddModal();
 });
 
-document.getElementById('modal-submit-btn').onclick = () => {
+// ── SETTINGS MODAL ──
+const REPO = 'MarlowRogers/USH-Chronicle';
+const TOKEN_KEY = 'ush_gh_token';
+
+document.getElementById('settings-close-btn').onclick  = () => document.getElementById('settings-modal').classList.remove('open');
+document.getElementById('settings-cancel-btn').onclick = () => document.getElementById('settings-modal').classList.remove('open');
+document.getElementById('settings-save-btn').onclick   = () => {
+  const val = document.getElementById('s-token').value.trim();
+  if (!val) return;
+  localStorage.setItem(TOKEN_KEY, val);
+  const st = document.getElementById('settings-status');
+  st.textContent = 'Token saved.';
+  st.style.display = 'block';
+  setTimeout(() => document.getElementById('settings-modal').classList.remove('open'), 800);
+};
+
+// ── ARTICLE SUBMIT ──
+document.getElementById('modal-submit-btn').onclick = async () => {
   const date     = document.getElementById('f-date').value.trim();
   const cat      = document.getElementById('f-cat').value;
   const headline = document.getElementById('f-headline').value.trim();
   const source   = document.getElementById('f-source').value.trim();
   const url      = document.getElementById('f-url').value.trim();
   const good     = document.getElementById('f-good').checked;
+  const token    = localStorage.getItem(TOKEN_KEY);
 
   if (!date || !headline || !source || !url) {
     alert('Please fill in Date, Headline, Source, and URL.');
     return;
   }
+  if (!token) {
+    alert('No GitHub token set. Click the ⚙ settings icon to add one.');
+    return;
+  }
 
-  const month = date.split(' ')[0]; // "April" from "April 11, 2026"
+  const month = date.split(' ')[0];
   const article = { date, month, cat, headline, source, url };
   if (good) article.good = true;
 
-  // Prepend so it appears at the top
-  ARTICLES.unshift(article);
-  activeDates.add(date);
+  const btn     = document.getElementById('modal-submit-btn');
+  const snippet = document.getElementById('modal-snippet');
+  btn.textContent = 'Saving…';
+  btn.disabled    = true;
+  snippet.style.display = 'none';
 
-  // Add to day select if new date
-  const daySelect = document.getElementById('day-select');
-  const exists = [...daySelect.options].some(o => o.value === date);
-  if (!exists) {
-    const opt = document.createElement('option');
-    opt.value = date;
-    const dt = new Date(date);
-    opt.textContent = dt.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
-    daySelect.insertBefore(opt, daySelect.options[1]);
+  try {
+    const apiUrl = `https://api.github.com/repos/${REPO}/contents/new_articles.json`;
+    const headers = {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    };
+
+    const getRes  = await fetch(apiUrl, { headers });
+    if (!getRes.ok) throw new Error('Could not read new_articles.json — check your token.');
+    const fileData = await getRes.json();
+    const current  = JSON.parse(atob(fileData.content.replace(/\n/g, '')));
+
+    current.unshift(article);
+
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT', headers,
+      body: JSON.stringify({
+        message: `Add article: ${headline.slice(0, 60)}`,
+        content: btoa(JSON.stringify(current, null, 2) + '\n'),
+        sha: fileData.sha
+      })
+    });
+    if (!putRes.ok) {
+      const err = await putRes.json();
+      throw new Error(err.message || 'GitHub API error');
+    }
+
+    // Optimistic UI update
+    ARTICLES.unshift(article);
+    activeDates.add(date);
+    const daySelect = document.getElementById('day-select');
+    if (![...daySelect.options].some(o => o.value === date)) {
+      const opt = document.createElement('option');
+      opt.value = date;
+      opt.textContent = new Date(date).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+      daySelect.insertBefore(opt, daySelect.options[1]);
+    }
+    render();
+
+    snippet.textContent = '✓ Saved! The site will reflect this in ~60 seconds.';
+    snippet.style.display = 'block';
+    btn.textContent = 'Saved ✓';
+  } catch (err) {
+    snippet.textContent = '✗ ' + err.message;
+    snippet.style.display = 'block';
+    btn.textContent = 'Add to Chronicle';
+    btn.disabled = false;
   }
-
-  render();
-
-  // Show copy snippet
-  const goodStr = good ? ', good:true' : '';
-  const js = `  {date:"${date}", month:"${month}", cat:"${cat}", headline:"${headline}", source:"${source}", url:"${url}"${goodStr}},`;
-  document.getElementById('modal-snippet').textContent = js;
-  document.getElementById('modal-snippet').style.display = 'block';
-  document.getElementById('modal-copy-btn').style.display = 'inline-block';
-  document.getElementById('modal-submit-btn').textContent = 'Added ✓';
-};
-
-document.getElementById('modal-copy-btn').onclick = () => {
-  const text = document.getElementById('modal-snippet').textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById('modal-copy-btn');
-    const prev = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = prev; }, 1500);
-  });
 };
 </script>
 </body>
