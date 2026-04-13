@@ -767,7 +767,7 @@ function buildControls() {
   const addBtn = document.createElement('button');
   addBtn.className = 'filter-btn add-btn';
   addBtn.textContent = '+ Add';
-  addBtn.onclick = openAddModal;
+  addBtn.onclick = async () => { if (await checkPassword()) openAddModal(); };
   document.querySelector('.controls-inner').insertBefore(addBtn, document.getElementById('article-count'));
 }
 
@@ -900,6 +900,24 @@ function render() {
   buildControls();
   render();
 })();
+
+// ── PASSWORD GATE ──
+const PW_HASH = 'fe1a9c0a301675578126c646da4a019abc414987b0c8e3d40df074007b126928';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function checkPassword() {
+  if (sessionStorage.getItem('ush_auth') === '1') return true;
+  const pw = prompt('Enter password to add articles:');
+  if (!pw) return false;
+  const hash = await sha256(pw);
+  if (hash === PW_HASH) { sessionStorage.setItem('ush_auth','1'); return true; }
+  alert('Incorrect password.');
+  return false;
+}
 
 // ── ADD ARTICLE MODAL ──
 function openAddModal() {
