@@ -617,6 +617,20 @@
 </footer>
 
 
+<div class="modal-overlay" id="pw-modal">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="modal-title">Enter Password</div>
+    <div class="modal-field">
+      <input class="modal-input" id="pw-input" type="password" placeholder="Password" autocomplete="current-password">
+    </div>
+    <div id="pw-error" style="font-size:11px;color:#b00;display:none;margin-top:4px;">Incorrect password.</div>
+    <div class="modal-actions">
+      <button class="modal-submit" id="pw-submit-btn">Unlock</button>
+      <button class="modal-cancel" id="pw-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="add-modal">
   <div class="modal-box">
     <button class="modal-close" id="modal-close-btn" aria-label="Close">×</button>
@@ -889,14 +903,54 @@ async function sha256(str) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-async function checkPassword() {
-  if (sessionStorage.getItem('ush_auth') === '1') return true;
-  const pw = prompt('Enter password to add articles:');
-  if (!pw) return false;
-  const hash = await sha256(pw);
-  if (hash === PW_HASH) { sessionStorage.setItem('ush_auth','1'); sessionStorage.setItem('ush_pw', pw); return true; }
-  alert('Incorrect password.');
-  return false;
+function checkPassword() {
+  if (sessionStorage.getItem('ush_auth') === '1') return Promise.resolve(true);
+  return new Promise(resolve => {
+    const modal   = document.getElementById('pw-modal');
+    const input   = document.getElementById('pw-input');
+    const errEl   = document.getElementById('pw-error');
+    const submitBtn = document.getElementById('pw-submit-btn');
+    const cancelBtn = document.getElementById('pw-cancel-btn');
+
+    input.value = '';
+    errEl.style.display = 'none';
+    modal.classList.add('open');
+    input.focus();
+
+    async function attempt() {
+      const pw = input.value;
+      const hash = await sha256(pw);
+      if (hash === PW_HASH) {
+        sessionStorage.setItem('ush_auth', '1');
+        sessionStorage.setItem('ush_pw', pw);
+        modal.classList.remove('open');
+        cleanup();
+        resolve(true);
+      } else {
+        errEl.style.display = 'block';
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    function cancel() {
+      modal.classList.remove('open');
+      cleanup();
+      resolve(false);
+    }
+
+    function onKey(e) { if (e.key === 'Enter') attempt(); if (e.key === 'Escape') cancel(); }
+
+    function cleanup() {
+      submitBtn.removeEventListener('click', attempt);
+      cancelBtn.removeEventListener('click', cancel);
+      input.removeEventListener('keydown', onKey);
+    }
+
+    submitBtn.addEventListener('click', attempt);
+    cancelBtn.addEventListener('click', cancel);
+    input.addEventListener('keydown', onKey);
+  });
 }
 
 // ── ADD ARTICLE MODAL ──
